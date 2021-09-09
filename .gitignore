@@ -129,5 +129,7 @@ dmypy.json
 .pyre/
 
 # Custom
-input
 asset
+input
+output
+verify
