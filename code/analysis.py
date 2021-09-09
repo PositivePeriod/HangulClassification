@@ -9,11 +9,12 @@ class Analyzer:
     def __init__(self):
         pass
 
-    def loadData():
+    def loadData(verify=False):
+        basePath = Util.inputDir if not verify else Util.verifyDir
         fonts = Util.getFonts()
         features = {}
         for font in fonts:
-            features[font['id']] = np.loadtxt(f"{Util.inputDir}/{font['name']}/analysis.csv", delimiter=",")
+            features[font['id']] = np.loadtxt(f"{basePath}/{font['name']}/analysis.csv", delimiter=",")
 
         fontNum = len(features)
         imageNum = features[0].shape[0]
@@ -52,8 +53,10 @@ class Analyzer:
         xTest = sc.transform(xTest)
 
         optimal = self.optimizeTraining(optimal, gammaOption, cOption, xTrain, yTrain, xTest, yTest)
-        self.training(optimal["c"], optimal["gamma"], xTrain, yTrain, xTest, yTest, debug=True)
+        result = self.training(optimal["c"], optimal["gamma"], xTrain, yTrain, xTest, yTest, debug=True)
+        result['sc'] = sc
         print('Analyzer.analyze Finished\n')
+        return result
 
     def training(self, c, gamma, xTrain, yTrain, xTest, yTest, debug=False):
         model = SVC(kernel='rbf', C=c, gamma=gamma)
@@ -66,7 +69,7 @@ class Analyzer:
             print(f"Ground truth : {yTest}")
             print(f"Accuracy     : {accurarcy}")
             print(f"R2           : {r2}")
-        return {"accuracy": accurarcy, "r2": r2}
+        return {"model": model, "accuracy": accurarcy, "r2": r2}
 
     def optimizeTraining(self, optimal, gammaOption, cOption, xTrain, yTrain, xTest, yTest):
         gammaTurn = (gammaOption["end"]-gammaOption["start"])/gammaOption["step"]
@@ -88,3 +91,14 @@ class Analyzer:
         # print(f"Optimal acc   : {optimal['accuracy']}")
         # print(f"Optimal r2    : {optimal['r2']}")
         return optimal
+
+    def testing(self, model, xTest, yTest, debug=False):
+        yPrediction = model.predict(xTest)
+        accurarcy = np.mean(yPrediction == yTest)
+        r2 = model.score(xTest, yTest) # coefficient of determination
+        if debug:
+            print(f"Prediction   : {yPrediction}")
+            print(f"Ground truth : {yTest}")
+            print(f"Accuracy     : {accurarcy}")
+            print(f"R2           : {r2}")
+        return {"model": model, "accuracy": accurarcy, "r2": r2}

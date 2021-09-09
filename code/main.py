@@ -8,7 +8,8 @@ if __name__ == "__main__":
     print()
 
     wantToMakeData = False
-    wantToAnalyze = True
+    wantToAnalyze = False
+    wantToVerify = True
 
     if wantToMakeData:
         # check overlapping
@@ -31,5 +32,25 @@ if __name__ == "__main__":
         opt = {"gamma": 0, "c": 0, "accuracy": -np.Inf,"r2": -np.Inf}
         g = {"start": 0.001, "end": 0.01, "step": 0.001}
         c = {"start": 1, "end": 1.5, "step": 0.03}
-        testRatio = 0.4
-        Analyzer().analyze(optimal=opt, gammaOption=g, cOption=c, testRatio=0.8)
+        result = Analyzer().analyze(optimal=opt, gammaOption=g, cOption=c, testRatio=0.8)
+        model = result["model"]
+        sc = result["sc"]
+        Util.saveModel({"model":model, "sc":sc})
+        
+    if wantToVerify:
+        modelName = 'bdod'
+        savedModel = Util.loadModel(modelName)
+        model, sc = savedModel["model"], savedModel["sc"]
+        
+        verifySize = 3
+        randomHangul = Util.getRandomHangul(verifySize)
+        print(randomHangul)
+        InputMaker().makeInput(texts=randomHangul, fontSize=28, verify=True)
+        InputPreprocessor().preprocess(size = (40, 40), verify=True)
+
+        data = Analyzer.loadData(verify=True)
+        xTest, yTest = data["image"], data["feature"]
+        xTest = sc.transform(xTest)
+
+        Analyzer().testing(model, xTest, yTest, debug=True)
+
