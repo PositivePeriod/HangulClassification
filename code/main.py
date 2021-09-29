@@ -1,64 +1,90 @@
 from inputManager import InputManager
 from analyzer import Analyzer
-from util import Util
+from util import Dir, Log, File
+from functools import cmp_to_key
 
 
-def logFonts(fontsID):
-    fonts = Util.getFonts(fontsID)
-    for font in fonts:
-        print(font["id"], font["name"])
-
-
-def makeData(fontsID, texts):
-    option = {"fontSize": 28, "margin": 1}
-    imageSize = (30, 30)
-
+def MAINmakeData(fontsID, texts):
     inputManager = InputManager()
-    imagesID = inputManager.makeImages(fontsID, texts, option)
-    inputManager.preprocess(imagesID, size=imageSize)
+    imagesID = inputManager.makeImages(
+        fontsID, texts, {"fontSize": 28, "margin": 0})
+    featuresID = inputManager.extractFeature(imagesID, size=(30, 30))
+    return imagesID, featuresID
 
 
-def makeModel(imagesID):
+def MAINmakeModel(featuresID):
     analyzer = Analyzer()
-    data = analyzer.loadData(imagesID, debug=True)
+    data = analyzer.loadData(featuresID)
     g = {"start": 0.001, "end": 0.01, "step": 0.001}
     c = {"start": 1, "end": 1.5, "step": 0.03}
-    result = analyzer.makeOptimizedModel(data, g, c, testRatio=0.2, debug=True)
-    return result
+    modelID = analyzer.makeOptimizedModel(data, g, c, testRatio=0.2)
+    return modelID
 
 
-def verifyModel(modelID, imagesID):
+def MAINverifyModel(modelID, featuresID):
     analyzer = Analyzer()
-    data = analyzer.loadData(imagesID, debug=True)
-    model = Util.loadModel(modelID)
+    data = analyzer.loadData(featuresID)
+    model = File.loadPickle(f"{Dir.modelsDir}/{modelID}/model.pkl")
     result = analyzer.verifyModel(
-        model, data["image"], data["feature"], debug=False)
-    print(Util.logFormat("Info", "Model", f"Accuracy {result['accuracy']}"))
-    for i, font in data["fontsName"].items():
-        print(i, font)
-    analyzer.drawConfusionMatrix(
-        result["answer"], result["prediction"], show=True)
+        model, data["featureData"], data["answerData"])
+    Log.logFormat("Info", "Verify",
+                  f"Model {modelID} by Features {featuresID}")
+    Log.logFormat("Info", "      ", f"Accuracy {result['accuracy']}")
+
+    modelMeta = File.loadJSON(f"{Dir.modelsDir}/{modelID}/meta.json")
+    featuresMeta = File.loadJSON(f"{Dir.featuresMetaDir}/{featuresID}.json")
+
+    answer = [File.getFontName(fontID) for fontID in result["answer"]]
+    prediction = [File.getFontName(fontID) for fontID in result["prediction"]]
+
+    labels = list(set(modelMeta['fonts']) | set(featuresMeta['fonts']))
+
+    def state(font):
+        if font in modelMeta['fonts'] and font in featuresMeta['fonts']:
+            return 0
+        elif font in modelMeta['fonts']:
+            return 1
+        elif font in featuresMeta['fonts']:
+            return 2
+        else:
+            return 3
+
+    def compare(font1, font2):
+        # change: 1 / not change: -1
+        if state(font1) > state(font2):
+            return 1
+        elif state(font1) < state(font2):
+            return -1
+        else:
+            if font1 < font2:
+                return -1
+            elif font1 > font2:
+                return 1
+            else:
+                return 0
+    labels.sort(key=cmp_to_key(compare))
+    analyzer.drawConfusionMatrix(answer, prediction, labels, show=True)
 
 
 if __name__ == "__main__":
-    Util.logStart()
-    chrList = [
-        # '동틀 녘 햇빛 포개짐',
-        '다람쥐 헌 쳇바퀴에 타고파',
-        '추운 겨울에는 따뜻한 커피와 티를 마셔야지요',
-        '키스의 고유 조건은 입술끼리 만나야 하고 특별한 기술은 필요치 않다',
-        '참나무 타는 소리와 야경만큼 밤의 여유를 표현해 주는 것도 없다',
-        '콩고물과 우유가 들어간 빙수는 차게 먹어야 특별한 맛이 잘 표현된다',
-    ]
-    chrs = sorted([x for x in list(set(''.join(chrList)))
-                  if x not in ['', ' ']])  # check overlapping
-    chrs = list('다람쥐없다된다')
-    makeData(fontsID=1, texts=chrs)
+    # Dir.resetEnv()
+    Dir.prepareDir()
 
-    # result = makeModel(imagesID=2)
+    prepare = False
+    make = False
+    verify = True
 
-    # logFonts(fontsID=0)
-    # verifyModel(modelID=2, imagesID=1)
+    if prepare:
+        fontsID = 3
+        texts = File.getPangram()
+        # texts = File.getKSX1001()
+        imagesID, featuresID = MAINmakeData(fontsID=fontsID, texts=texts)
 
-    # 다른 image 할 수 있게 하려면 model과 image 모두 fontsNumber 필요 ????? TODOTODTODOTODOTODOTODOTODOTODO
-    Util.logFinish()
+    if make:
+        # featuresID = 2
+        modelID = MAINmakeModel(featuresID=featuresID)
+
+    if verify:
+        featuresID = 3
+        modelID = 4
+        MAINverifyModel(modelID=modelID, featuresID=featuresID)

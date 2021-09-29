@@ -1,7 +1,5 @@
 import pickle
 import json
-import string
-import random
 import os
 import shutil
 
@@ -10,14 +8,19 @@ class Dir:  # Directory Manager
     mainDir = "."
     inputDir = f"{mainDir}/input"
     fontsDir = f"{inputDir}/fonts"
-    imagesDir = f"{inputDir}/images"
-    metaDir = f"{inputDir}/meta"
+
+    metaDir = f"{mainDir}/meta"
+    imagesMetaDir = f"{metaDir}/images"
+    featuresMetaDir = f"{metaDir}/features"
 
     outputDir = f"{mainDir}/output"
+    imagesDir = f"{outputDir}/images"
+    featuresDir = f"{outputDir}/features"
     modelsDir = f"{outputDir}/models"
-    resultsDir = f"{outputDir}/results"
-    dirList = [mainDir, inputDir, fontsDir, imagesDir,
-               metaDir, outputDir, modelsDir, resultsDir]
+
+    dirList = [mainDir, inputDir, fontsDir,
+               metaDir, imagesMetaDir, featuresMetaDir,
+               outputDir, imagesDir, featuresDir, modelsDir]
 
     @staticmethod
     def prepareDir():
@@ -39,101 +42,118 @@ class Dir:  # Directory Manager
 
     @staticmethod
     def newDir(path):
-        os.path.
+        newID = len(os.listdir(path))
+        Dir.makeDir(f"{path}/{newID}")
+        return newID
+
+    @staticmethod
+    def removeFile(path):
+        content = Log.logFormat("Confirm", "Erase", f"Enter Y to erase {path} : ", show=False)
+        if Dir.existFile(path) and input(content) == "Y":
+            os.remove(path)
 
     @staticmethod
     def removeDir(path):
-        text = Log.logFormat("Confirm", "Erase",
-                             f"Enter Y to erase {path} : ")
-        if input(text) == "Y":
+        content = Log.logFormat("Confirm", "Erase", f"Enter Y to erase {path} : ", show=False)
+        if Dir.existDir(path) and input(content) == "Y":
             shutil.rmtree(path)
 
     @staticmethod
-    def getDirNumber(path):
-        return len(os.listdir(path))
-    # Todo deprecated
+    def resetEnv():
+        Dir.removeDir(Dir.metaDir)
+        Dir.removeDir(Dir.outputDir)
 
 
 class Log:
-    @staticmethod
-    def logFormat(state, do, msg):
-        assert(len(state) <= 10)
-        assert(len(do) <= 10)
-        return f"{state.ljust(10)} | {do.ljust(10)} | {msg}"
+    stateLength = 10
+    doLength = 10
 
     @staticmethod
-    def logStart():
-        print(Log.logFormat('-' * 10, '-' * 10, '-' * 30))
-
-    @staticmethod
-    def logFinish():
-        print(Log.logFormat('-' * 10, '-' * 10, '-' * 30))
+    def logFormat(state, do, msg, show=True):
+        assert(len(state) <= Log.stateLength)
+        assert(len(do) <= Log.doLength)
+        content = f"{state.ljust(Log.stateLength)} | {do.ljust(Log.doLength)} | {msg}"
+        if show:
+            print(content)
+        else:
+            return content
 
 
 class File:
     fontDictPath = f"{Dir.metaDir}/fontDict.json"
     KSX1001Path = f"{Dir.inputDir}/KSX1001.txt"
+    PangramPath = f"{Dir.inputDir}/pangram.txt"
 
-    @staticmethod
+    @ staticmethod
     def saveJSON(data, path):
-        with open(path, 'w') as f:
-            json.dump(data, f)
+        with open(path, "w", encoding="UTF-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
 
-    @staticmethod
+    @ staticmethod
     def loadJSON(path):
-        with open(path, 'r') as f:
+        with open(path, "r", encoding="UTF-8") as f:
             data = json.load(f)
         return data
 
-    @staticmethod
+    @ staticmethod
     def getFontDict():
         if not Dir.existFile(File.fontDictPath):
             File.saveJSON({}, File.fontDictPath)
         return File.loadJSON(File.fontDictPath)
 
-    @staticmethod
+    @ staticmethod
     def saveFontDict(data):
         File.saveJSON(data, File.fontDictPath)
 
-    @staticmethod
+    @ staticmethod
     def getFontID(fontName):
         fontDict = File.getFontDict()
-        if fontName not in fontDict:
-            fontDict[fontName] = len(fontDict)  # new FontID
+        if fontName not in fontDict.keys():
+            fontID = len(fontDict)
+            assert fontID not in fontDict.values()
+            fontDict[fontName] = fontID
             File.saveFontDict(fontDict)
         return fontDict[fontName]
 
     @staticmethod
-    def getKSX1001():
-        with open(File.KSX1001Path, "r", encoding='utf-8') as f:
+    def getFontName(fontID):
+        fontDict = File.getFontDict()
+        if fontID in fontDict.values():
+            return list(fontDict.keys())[list(fontDict.values()).index(fontID)]
+        else:
+            return None
+
+    @staticmethod
+    def loadTXT(path):
+        with open(path, "r", encoding="utf-8") as f:
             data = f.read()
+        return data
+
+    @ staticmethod
+    def getKSX1001():
+        data = File.loadTXT(File.KSX1001Path)
         assert len(data) == 2350
         return data
 
-    @staticmethod
+    @ staticmethod
+    def getPangram():
+        data = File.loadTXT(File.PangramPath)
+        return [x for x in set(data) if len(x.strip()) > 0]
+
+    @ staticmethod
     def getFonts(path):
         extension = [".ttf", ".otf", ".TTF", ".OTF"]
-        fonts = [{"name": fontPath[:-4], "path": f"{path}/{fontPath}", "id": File.getFontNum(fontPath[:-4])}
+        fonts = [{"name": fontPath[:-4], "path": f"{path}/{fontPath}", "id": File.getFontID(fontPath[:-4])}
                  for fontPath in os.listdir(path) if fontPath[-4:] in extension]
         return fonts
 
-    @staticmethod
+    @ staticmethod
     def savePickle(data, path):
         with open(path, "wb") as f:
             pickle.dump(data, f)
 
-    @staticmethod
+    @ staticmethod
     def loadPickle(path):
         with open(path, "rb") as f:
             data = pickle.load(f)
         return data
-
-
-class SmallFunction:
-    @staticmethod
-    def getRandomHangul(n):
-        return random.sample(File.getKSX1001(), n)
-
-    @staticmethod
-    def randomString(n):
-        return ''.join(random.choices(string.ascii_lowercase + string.digits, k=n))

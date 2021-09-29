@@ -1,79 +1,60 @@
-import os
 import numpy as np
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
-from util import Dir, Log, File, SmallFunction
+from util import Dir, Log, File
 
 
 class InputManager:
     def __init__(self):
-        Dir.prepareDir()
+        pass
 
     def makeImages(self, fontsID, texts, option):
         # option : fontSize, margin
-        imagesID = Util.getDirNumber(Util.imagesDir)
-        dirPath = f"{Util.imagesDir}/{imagesID}"
-        Util.makeDir(dirPath)
-        fonts = Util.getFonts(fontsID)
+        imagesID = Dir.newDir(Dir.imagesDir)
+        fonts = File.getFonts(f"{Dir.fontsDir}/{fontsID}")
         for font in fonts:
-            path = f"{dirPath}/{font['name']}"
-            Util.makeDir(path)
+            Dir.makeDir(f"{Dir.imagesDir}/{imagesID}/{font['name']}")
             for text in texts:
-                self.makeImage(font, text, path, option)
-        with open(f"{dirPath}/info.txt", "w", encoding="UTF-8") as f:
-            textStr = '\n'.join([' '.join(texts[i:i + 10])
-                                for i in range(0, len(texts), 10)])
-            fontStr = '\n'.join(font['name'] for font in fonts)
-            f.write(f"Time : {datetime.now()}\n")
-            f.write(f"Text : {len(texts)}\n{textStr}\n")
-            f.write(f"Font : {len(fonts)}\n{fontStr}\n")
-        print(Util.logFormat("Success", "Make", f"Images {imagesID}"))
+                self.makeImage(font, text, f"{Dir.imagesDir}/{imagesID}/{font['name']}/{text}.png", option)
+        metaData = {"time": str(datetime.now()), "texts": texts, "fonts": [font["name"] for font in fonts]}
+        File.saveJSON(metaData, f"{Dir.imagesMetaDir}/{imagesID}.json")
+        Log.logFormat("Success", "Make", f"Images {imagesID} from Fonts {fontsID}")
         return imagesID
 
     def makeImage(self, font, text, path, option):
-        fontFile = ImageFont.truetype(
-            font['path'], size=option['fontSize'])  # TTF OTF 구분? TODO
+        fontFile = ImageFont.truetype(font["path"], size=option["fontSize"])  # TTF OTF 구분? TODO
         minWidth, minHeight = fontFile.getsize(text)
+        width, height = minWidth + 2 * option["margin"], minHeight + 2 * option["margin"]
+        image = Image.new("RGB", (width, height), color="white")
+        ImageDraw.Draw(image).text((option["margin"], option["margin"]), text, font=fontFile, fill="black")
+        image.save(path)
 
-        margin = option['margin']
-        width, height = minWidth + 2 * margin, minHeight + 2 * margin
-        image = Image.new('RGB', (width, height), color='white')
-        draw = ImageDraw.Draw(image)
-        draw.text((margin, margin), text, font=fontFile, fill='black')
-        image.save(f"{path}/{text}.png")
-
-    def preprocess(self, imagesID, size):
-        path = f"{Util.imagesDir}/{imagesID}"
-        imagesPaths = os.listdir(path)
-        for imagesPath in imagesPaths:
-            if imagesPath[-4:] == ".txt":
-                continue  # info.txt
+    def extractFeature(self, imagesID, size):
+        featuresID = Dir.newDir(Dir.featuresDir)
+        imagesMeta = File.loadJSON(f"{Dir.imagesMetaDir}/{imagesID}.json")
+        for fontName in imagesMeta["fonts"]:
             features = []
-            imagePaths = os.listdir(f"{path}/{imagesPath}")
-            for imagePath in imagePaths:
-                if imagePath[-4:] != ".png":
-                    continue  # to ignore analysis.csv
-                image = Image.open(f"{path}/{imagesPath}/{imagePath}")
-                feature = self.extractFeatureFromImage(image, size)
-                features.append(feature)
-            np.savetxt(f"{path}/{imagesPath}/analysis.csv",
-                       features, delimiter=",")
-        print(Util.logFormat("Success", "Preprocess", f"Images {imagesID}"))
+            for text in imagesMeta["texts"]:
+                image = Image.open(f"{Dir.imagesDir}/{imagesID}/{fontName}/{text}.png")
+                features.append(self.calculate(image, size))
+            np.savetxt(f"{Dir.featuresDir}/{featuresID}/{fontName}.csv", features, delimiter=",")
+        featuresMeta = {"time": str(datetime.now()),
+                        "texts": imagesMeta["texts"], "fonts": imagesMeta["fonts"],
+                        "size": size, "featureLength": len(features[0])}
+        File.saveJSON(featuresMeta, f"{Dir.featuresMetaDir}/{featuresID}.json")
+        Log.logFormat("Success", "Extract", f"Features {featuresID} from Images {imagesID}")
+        return featuresID
 
-    def extractFeatureFromImage(self, image, size):
-        grayImage = image.convert('L')
+    def calculate(self, image, size):
+        grayImage = image.convert("L")
         resizedImage = grayImage.resize(size, Image.NEAREST)
         resizedArray = np.array(resizedImage)
-
         # Basic Feature : return resizedArray.flatten
         # https://stackoverflow.com/questions/56987200
         xCounter = resizedArray.mean(axis=0)
         yCounter = resizedArray.mean(axis=1)
         n = len(resizedArray)
-        leftDiagCounter = np.array(
-            [np.mean(np.diag(np.fliplr(resizedArray), d)) for d in range(n - 1, -n, -1)])
-        rightDiagCounter = np.array(
-            [np.mean(np.diag(resizedArray, d)) for d in range(n - 1, -n, -1)])
-        feature = np.concatenate(
-            (xCounter, yCounter, leftDiagCounter, rightDiagCounter))
+        leftDiagCounter = np.array([np.mean(np.diag(np.fliplr(resizedArray), d)) for d in range(n - 1, -n, -1)])
+        rightDiagCounter = np.array([np.mean(np.diag(resizedArray, d)) for d in range(n - 1, -n, -1)])
+        feature = np.concatenate((xCounter, yCounter, leftDiagCounter, rightDiagCounter))
         return feature

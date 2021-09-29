@@ -1,139 +1,104 @@
 from datetime import datetime
-import os
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.core.fromnumeric import size
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix
 from sklearn.svm import SVC
-from util import Util
+from util import Dir, Log, File
 
 
 class Analyzer:
     def __init__(self):
-        Util.makeDir(Util.inputDir)
-        Util.makeDir(Util.imagesDir)
-        Util.makeDir(Util.outputDir)
-        Util.makeDir(Util.modelsDir)
-        Util.makeDir(Util.resultsDir)
+        pass
 
-    def loadData(self, imagesID, debug=False):
-        path = f"{Util.imagesDir}/{imagesID}"
-        imagesPaths = os.listdir(path)
-        features = {}
-        fontsName = dict()
-        for imagesPath in imagesPaths:
-            if imagesPath[-4:] == ".txt":
-                continue  # except info.txt
-            # imagesPath = font["name"]
-            features[imagesPath] = np.loadtxt(
-                f"{path}/{imagesPath}/analysis.csv", delimiter=",")
-            fontsName[imagesPath] = len(fontsName)
+    def loadData(self, featuresID):
+        meta = File.loadJSON(f"{Dir.featuresMetaDir}/{featuresID}.json")
+        featureData = np.empty((0, meta["featureLength"]), dtype=int)
+        answerData = []
+        for fontName in meta["fonts"]:
+            fontID = File.getFontID(fontName)
+            answerData.extend([fontID] * len(meta["texts"]))
+            data = np.loadtxt(f"{Dir.featuresDir}/{featuresID}/{fontName}.csv", delimiter=",")
+            for i in range(len(meta["texts"])):
+                featureData = np.append(featureData, np.reshape(data[i, :], (1, meta["featureLength"])), axis=0)
+        answerData = np.array(answerData)
 
-        assert len(features) > 0
-        fontNum = len(features)
-        randomCase = list(features.values())[0]
-        imageNum = randomCase.shape[0]
-        featureNum = randomCase.shape[1]
-        caseNum = fontNum * imageNum
+        assert len(answerData) > 0 \
+            and featureData.shape == (len(meta["fonts"]) * len(meta["texts"]), meta["featureLength"]) \
+            and answerData.shape == (len(meta["fonts"]) * len(meta["texts"]),)
+        Log.logFormat("Success", "Load", f"Features {featuresID}")
+        return {"featureData": featureData, "answerData": answerData, "featuresID": featuresID}
 
-        imageData = np.empty((0, featureNum), dtype=int)
-        featureData = []
-        for fontID, feature in features.items():
-            for caseID in range(imageNum):
-                caseImage = np.reshape(feature[caseID, :], (1, featureNum))
-                caseName = fontsName[fontID]
-                imageData = np.append(imageData, caseImage, axis=0)
-                featureData.append(caseName)
-        featureData = np.array(featureData)
-
-        assert imageData.shape == (
-            caseNum, featureNum) and featureData.shape == (caseNum,)
-        print(Util.logFormat("Success", "Load", f"Images {imagesID}"))
-        if debug:
-            print(Util.logFormat("Info", "#Font", f"{fontNum}"))
-            print(Util.logFormat("Info", "#Image", f"{imageNum}"))
-            print(Util.logFormat("Info", "#Feature", f"{featureNum}"))
-            print(Util.logFormat("Info", "#Case", f"{caseNum}"))
-        return {"image": imageData, "feature": featureData, "imagesID": imagesID, "fontsName": fontsName}
-
-    def makeOptimizedModel(self, data, gammaOption, cOption, testRatio, debug=False):
-        imageData, featureData, imagesID = data["image"], data["feature"], data["imagesID"]
+    def makeOptimizedModel(self, data, gOpt, cOpt, testRatio):
+        featureData, answerData, featuresID = data["featureData"], data["answerData"], data["featuresID"]
         # Amount of TrainData : Amount of TestData = 1-testRatio : testRatio
-        xTrain, xTest, yTrain, yTest = train_test_split(
-            imageData, featureData, test_size=testRatio)
+        xTrain, xTest, yTrain, yTest = train_test_split(featureData, answerData, test_size=testRatio)
 
-        gammaTurn = (gammaOption["end"] -
-                     gammaOption["start"]) / gammaOption["step"]
-        cTurn = (cOption["end"] - cOption["start"]) / cOption["step"]
-        turnNum = gammaTurn * cTurn  # TODO Progress bar
-
-        sc = StandardScaler()  # Adjust data scaling
-        sc.fit(xTrain)
-        xTrain = sc.transform(xTrain)
-
-        optimizeParam = None
-        maxModel = None
-        maxAccuracy = -np.Inf
-        for gamma in np.arange(gammaOption["start"], gammaOption["end"], gammaOption["step"]):
-            for c in np.arange(cOption["start"], cOption["end"], cOption["step"]):
-                svm = SVC(kernel='rbf', C=c, gamma=gamma)
-                svm.fit(xTrain, yTrain)
-                model = {"svm": svm, "sc": sc}
+        best = {"gamma": None, "c": None, "model": None, "accuracy": -np.Inf}
+        for gamma in np.arange(gOpt["start"], gOpt["end"], gOpt["step"]):
+            for c in np.arange(cOpt["start"], cOpt["end"], cOpt["step"]):
+                model = self.makeModel(c, gamma, xTrain, yTrain)
                 result = self.verifyModel(model, xTest, yTest)
-                if result["accuracy"] > maxAccuracy:
-                    optimizeParam = {"gamma": gamma, "c": c}
-                    maxModel = model
-                    maxAccuracy = result["accuracy"]
+                if result["accuracy"] > best["accuracy"]:
+                    best = {"gamma": gamma, "c": c, "model": model, "accuracy": result["accuracy"]}
 
-        model["fontsName"] = data["fontsName"]
-        modelID = Util.saveModel(model)
-        with open(f"{Util.imagesDir}/{imagesID}/info.txt", "r", encoding="UTF-8") as f:
-            imagesInfo = f.read()
-        with open(f"{Util.modelsDir}/{modelID}.txt", "w", encoding="UTF-8") as f:
-            f.write(f"Time : {datetime.now()}\n")
-            f.write(f"Gamma : {optimizeParam['gamma']}\n")
-            f.write(f"C : {optimizeParam['c']}\n")
-            f.write(f"Accuracy : {maxAccuracy}\n")
-            f.write(f"TestRatio : {testRatio}\n")
-            f.write(f"\nImage :\n{imagesInfo}")
-        if debug:
-            print(Util.logFormat("Info", "Model",
-                  f"Optimized gamma {optimizeParam['gamma']}"))
-            print(Util.logFormat("Info", "Model",
-                  f"Optimized c {optimizeParam['c']}"))
-            print(Util.logFormat("Info", "Model", f"Accuracy {maxAccuracy}"))
-        return {"model": maxModel, "gamma": optimizeParam["gamma"], "c": optimizeParam["c"], "accuracy": maxAccuracy}
+        modelID = Dir.newDir(Dir.modelsDir)
+        File.savePickle(best["model"], f"{Dir.modelsDir}/{modelID}/model.pkl")
+        featuresMeta = File.loadJSON(f"{Dir.featuresMetaDir}/{featuresID}.json")
+        modelMeta = {
+            "time": str(datetime.now()), "gamma": best["gamma"], "c": best["c"],
+            "accuracy": best["accuracy"], "ratio": testRatio,
+            "texts": featuresMeta["texts"], "fonts": featuresMeta["fonts"], "size": featuresMeta["size"]}
+        File.saveJSON(modelMeta, f"{Dir.modelsDir}/{modelID}/meta.json")
+        Log.logFormat("Success", "Make", f"Model {modelID} from Features {data['featuresID']}")
+        return modelID
 
-    def makeModel(self, c, gamma, xTrain, yTrain, xTest, yTest):
+    def makeModel(self, c, gamma, xTrain, yTrain):
         sc = StandardScaler()  # Adjust data scaling
         sc.fit(xTrain)
         xTrain = sc.transform(xTrain)
-        svm = SVC(kernel='rbf', C=c, gamma=gamma)
+        svm = SVC(kernel="rbf", C=c, gamma=gamma)
         svm.fit(xTrain, yTrain)
-        model = {"svm": svm, "sc": sc}
+        return {"svm": svm, "sc": sc}
 
-        result = self.verifyModel(model, xTest, yTest)
-        return {"model": model, "result": result}
-
-    def verifyModel(self, model, xTest, yTest, debug=False):
+    def verifyModel(self, model, xTest, yTest):
         xTest = model["sc"].transform(xTest)
         yPrediction = model["svm"].predict(xTest)
         accuracy = np.mean(yPrediction == yTest)
-        if debug:
-            print(Util.logFormat("Info", "Model", f"Accuracy {accuracy}"))
-            print(Util.logFormat("Info", "Model", f"Prediction {yPrediction}"))
-            print(Util.logFormat("Info", "Model", f"Answer {yTest}"))
         return {"prediction": yPrediction, "answer": yTest, "accuracy": accuracy}
 
-    def drawConfusionMatrix(self, yTrue, yPrediction, show=True):
-        cm = confusion_matrix(yTrue, yPrediction)
+    def drawConfusionMatrix(self, yTrue, yPrediction, labels, show=True):
+        plt.rc('font', family='Malgun Gothic', size="7")  # Hangul Font
+        for fontName in labels:
+            print('True', labels, yTrue.count(fontName))
+        for fontName in labels:
+            print('Pred', labels, yPrediction.count(fontName))
+
+        cm = confusion_matrix(yTrue, yPrediction, labels=labels)
         rowSum = cm.sum(axis=1, keepdims=True)
-        print(cm, rowSum)
-        normCM = cm / rowSum
+        print("CM : \n", cm)
+        print("rowSum :", rowSum.tolist())
+        normCM = cm / np.where(rowSum > 0, rowSum, 1)
         np.fill_diagonal(normCM, 0)
         if show:
-            plt.matshow(cm, cmap=plt.cm.gray)
-            plt.matshow(normCM, cmap=plt.cm.gray)
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            cax = ax.matshow(cm, cmap=plt.cm.gray)
+            fig.colorbar(cax)
+            ax.set_xticks(np.arange(len(labels)))
+            ax.set_yticks(np.arange(len(labels)))
+            ax.set_xticklabels(labels)
+            ax.set_yticklabels(labels)
+
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            cax = ax.matshow(normCM, cmap=plt.cm.gray)
+            fig.colorbar(cax)
+            ax.set_xticks(np.arange(len(labels)))
+            ax.set_yticks(np.arange(len(labels)))
+            ax.set_xticklabels(labels)
+            ax.set_yticklabels(labels)
             plt.show()
         return normCM
