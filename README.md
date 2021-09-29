@@ -4,7 +4,9 @@ KSA Graduation Research
 ## PIP
 pip install numpy  
 pip install scikit-learn  
-pip install Pillow  
+pip install Pillow
+pip install matplotlib
+pip install autopep8
 pip freeze > requirements.txt
 
 ## REFERENCE
@@ -14,6 +16,7 @@ https://jeongmin-lee.tistory.com/87
 https://yeoulcoding.tistory.com/106s  
 https://namu.wiki/w/%EC%99%84%EC%84%B1%ED%98%95/%ED%95%9C%EA%B8%80%20%EB%AA%A9%EB%A1%9D/KS%20X%201001  
 https://hoony-gunputer.tistory.com/entry/opencv-python-%EC%9D%B4%EB%AF%B8%EC%A7%80-%EB%B3%80%ED%99%94%EC%A3%BC%EA%B8%B0
+[Confusion Matrix](https://datascienceschool.net/03%20machine%20learning/09.04%20%EB%B6%84%EB%A5%98%20%EC%84%B1%EB%8A%A5%ED%8F%89%EA%B0%80.html)
 
 ## TODO
 "가" 보여줘도 "환" 폰트 맞추기 -> 이를 위해 image용 str 효율적으로 잘 설정해야 할 것 Ex) 팬그램  
