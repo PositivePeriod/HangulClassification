@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.core.fromnumeric import size
@@ -32,6 +33,7 @@ class Analyzer:
         return {"featureData": featureData, "answerData": answerData, "featuresID": featuresID}
 
     def makeOptimizedModel(self, data, gOpt, cOpt, testRatio):
+        t = time.time()
         featureData, answerData, featuresID = data["featureData"], data["answerData"], data["featuresID"]
         # Amount of TrainData : Amount of TestData = 1-testRatio : testRatio
         xTrain, xTest, yTrain, yTest = train_test_split(featureData, answerData, test_size=testRatio)
@@ -48,7 +50,7 @@ class Analyzer:
         File.savePickle(best["model"], f"{Dir.modelsDir}/{modelID}/model.pkl")
         featuresMeta = File.loadJSON(f"{Dir.featuresMetaDir}/{featuresID}.json")
         modelMeta = {
-            "time": str(datetime.now()), "gamma": best["gamma"], "c": best["c"],
+            "time": str(datetime.now()), "runtime": time.time()-t, "gamma": best["gamma"], "c": best["c"],
             "accuracy": best["accuracy"], "ratio": testRatio,
             "texts": featuresMeta["texts"], "fonts": featuresMeta["fonts"], "size": featuresMeta["size"]}
         File.saveJSON(modelMeta, f"{Dir.modelsDir}/{modelID}/meta.json")
@@ -70,35 +72,25 @@ class Analyzer:
         return {"prediction": yPrediction, "answer": yTest, "accuracy": accuracy}
 
     def drawConfusionMatrix(self, yTrue, yPrediction, labels, show=True):
-        plt.rc('font', family='Malgun Gothic', size="7")  # Hangul Font
-        for fontName in labels:
-            print('True', labels, yTrue.count(fontName))
-        for fontName in labels:
-            print('Pred', labels, yPrediction.count(fontName))
+        plt.rc('font', family='Malgun Gothic', size="5")  # Hangul Font
 
         cm = confusion_matrix(yTrue, yPrediction, labels=labels)
         rowSum = cm.sum(axis=1, keepdims=True)
-        print("CM : \n", cm)
-        print("rowSum :", rowSum.tolist())
+        # print("CM : \n", cm)
+        # print("rowSum :", [x[0] for x in rowSum.tolist()])
         normCM = cm / np.where(rowSum > 0, rowSum, 1)
         np.fill_diagonal(normCM, 0)
         if show:
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            cax = ax.matshow(cm, cmap=plt.cm.gray)
-            fig.colorbar(cax)
-            ax.set_xticks(np.arange(len(labels)))
-            ax.set_yticks(np.arange(len(labels)))
-            ax.set_xticklabels(labels)
-            ax.set_yticklabels(labels)
-
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            cax = ax.matshow(normCM, cmap=plt.cm.gray)
-            fig.colorbar(cax)
-            ax.set_xticks(np.arange(len(labels)))
-            ax.set_yticks(np.arange(len(labels)))
-            ax.set_xticklabels(labels)
-            ax.set_yticklabels(labels)
+            for data in [cm, normCM]:
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                cax = ax.matshow(data, cmap=plt.cm.gray)
+                fig.colorbar(cax)
+                ax.set_xticks(np.arange(len(labels)))
+                ax.set_yticks(np.arange(len(labels)))
+                ax.set_xticklabels(labels)
+                ax.set_yticklabels(labels)
+                ax.tick_params(axis="x", rotation=90)
             plt.show()
-        return normCM
+        else:
+            return cm, normCM

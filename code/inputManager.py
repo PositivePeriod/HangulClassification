@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
@@ -9,6 +10,7 @@ class InputManager:
         pass
 
     def makeImages(self, fontsID, texts, option):
+        t = time.time()
         # option : fontSize, margin
         imagesID = Dir.newDir(Dir.imagesDir)
         fonts = File.getFonts(f"{Dir.fontsDir}/{fontsID}")
@@ -16,7 +18,7 @@ class InputManager:
             Dir.makeDir(f"{Dir.imagesDir}/{imagesID}/{font['name']}")
             for text in texts:
                 self.makeImage(font, text, f"{Dir.imagesDir}/{imagesID}/{font['name']}/{text}.png", option)
-        metaData = {"time": str(datetime.now()), "texts": texts, "fonts": [font["name"] for font in fonts]}
+        metaData = {"time": str(datetime.now()), "runtime": time.time()-t, "texts": texts, "fonts": [font["name"] for font in fonts]}
         File.saveJSON(metaData, f"{Dir.imagesMetaDir}/{imagesID}.json")
         Log.logFormat("Success", "Make", f"Images {imagesID} from Fonts {fontsID}")
         return imagesID
@@ -30,6 +32,7 @@ class InputManager:
         image.save(path)
 
     def extractFeature(self, imagesID, size):
+        t = time.time()
         featuresID = Dir.newDir(Dir.featuresDir)
         imagesMeta = File.loadJSON(f"{Dir.imagesMetaDir}/{imagesID}.json")
         for fontName in imagesMeta["fonts"]:
@@ -38,7 +41,7 @@ class InputManager:
                 image = Image.open(f"{Dir.imagesDir}/{imagesID}/{fontName}/{text}.png")
                 features.append(self.calculate(image, size))
             np.savetxt(f"{Dir.featuresDir}/{featuresID}/{fontName}.csv", features, delimiter=",")
-        featuresMeta = {"time": str(datetime.now()),
+        featuresMeta = {"time": str(datetime.now()), "runtime": time.time()-t,
                         "texts": imagesMeta["texts"], "fonts": imagesMeta["fonts"],
                         "size": size, "featureLength": len(features[0])}
         File.saveJSON(featuresMeta, f"{Dir.featuresMetaDir}/{featuresID}.json")

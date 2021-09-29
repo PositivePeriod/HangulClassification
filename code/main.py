@@ -68,16 +68,17 @@ def MAINverifyModel(modelID, featuresID):
 
 if __name__ == "__main__":
     # Dir.resetEnv()
+    # Dir.showEnv()
     Dir.prepareDir()
 
-    prepare = False
+    prepare = True
     make = False
     verify = True
 
     if prepare:
-        fontsID = 3
-        texts = File.getPangram()
-        # texts = File.getKSX1001()
+        fontsID = 2
+        # texts = File.getPangram()
+        texts = File.getKSX1001()
         imagesID, featuresID = MAINmakeData(fontsID=fontsID, texts=texts)
 
     if make:
@@ -85,6 +86,6 @@ if __name__ == "__main__":
         modelID = MAINmakeModel(featuresID=featuresID)
 
     if verify:
-        featuresID = 3
-        modelID = 4
+        featuresID = 1
+        modelID = 0
         MAINverifyModel(modelID=modelID, featuresID=featuresID)
