@@ -2,12 +2,12 @@ from datetime import datetime
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy.core.fromnumeric import size
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix
-from sklearn.svm import SVC
-from util import Dir, Log, File
+from sklearn.svm import LinearSVC
+from util import Dir, Log, File, FontDict
+import math
 
 
 class Analyzer:
@@ -19,7 +19,7 @@ class Analyzer:
         featureData = np.empty((0, meta["featureLength"]), dtype=int)
         answerData = []
         for fontName in meta["fonts"]:
-            fontID = File.getFontID(fontName)
+            fontID = FontDict().getFontID(fontName)
             answerData.extend([fontID] * len(meta["texts"]))
             data = np.loadtxt(f"{Dir.featuresDir}/{featuresID}/{fontName}.csv", delimiter=",")
             for i in range(len(meta["texts"])):
@@ -37,15 +37,17 @@ class Analyzer:
         featureData, answerData, featuresID = data["featureData"], data["answerData"], data["featuresID"]
         # Amount of TrainData : Amount of TestData = 1-testRatio : testRatio
         xTrain, xTest, yTrain, yTest = train_test_split(featureData, answerData, test_size=testRatio)
-
         best = {"gamma": None, "c": None, "model": None, "accuracy": -np.Inf}
+        steps = math.ceil((gOpt["end"]-gOpt["start"])/gOpt["step"])*math.ceil((cOpt["end"]-cOpt["start"])/cOpt["step"])
+        curStep = 0
         for gamma in np.arange(gOpt["start"], gOpt["end"], gOpt["step"]):
             for c in np.arange(cOpt["start"], cOpt["end"], cOpt["step"]):
                 model = self.makeModel(c, gamma, xTrain, yTrain)
                 result = self.verifyModel(model, xTest, yTest)
                 if result["accuracy"] > best["accuracy"]:
                     best = {"gamma": gamma, "c": c, "model": model, "accuracy": result["accuracy"]}
-
+                print(f"{curStep}/{steps}")
+                curStep += 1
         modelID = Dir.newDir(Dir.modelsDir)
         File.savePickle(best["model"], f"{Dir.modelsDir}/{modelID}/model.pkl")
         featuresMeta = File.loadJSON(f"{Dir.featuresMetaDir}/{featuresID}.json")
@@ -61,7 +63,8 @@ class Analyzer:
         sc = StandardScaler()  # Adjust data scaling
         sc.fit(xTrain)
         xTrain = sc.transform(xTrain)
-        svm = SVC(kernel="rbf", C=c, gamma=gamma)
+        # svm = SVC(kernel="rbf", C=c, gamma=gamma)
+        svm = LinearSVC(C=1, random_state=1, max_iter=100000000)
         svm.fit(xTrain, yTrain)
         return {"svm": svm, "sc": sc}
 
@@ -92,5 +95,4 @@ class Analyzer:
                 ax.set_yticklabels(labels)
                 ax.tick_params(axis="x", rotation=90)
             plt.show()
-        else:
-            return cm, normCM
+        return cm, normCM

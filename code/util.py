@@ -70,19 +70,21 @@ class Dir:  # Directory Manager
         for fontDir in os.listdir(Dir.fontsDir):
             Log.showFormat(f"{fontDir}", f"Fonts: {len(os.listdir(f'{Dir.fontsDir}/{fontDir}'))}")
         Log.showFormat("=" * Log.doLength, "=" * Log.doLength)
+        Log.showFormat("Images", "")
+        for imagesPath in os.listdir(Dir.imagesMetaDir):
+            meta = File.loadJSON(f"{Dir.imagesMetaDir}/{imagesPath}")
+            Log.showFormat(f"{imagesPath[:-5]}", f"Imag: {len(meta['fonts'])}  Texts: {len(meta['texts'])}")
+        Log.showFormat("=" * Log.doLength, "=" * Log.doLength)
         Log.showFormat("Features", "")
         for featuresPath in os.listdir(Dir.featuresMetaDir):
             meta = File.loadJSON(f"{Dir.featuresMetaDir}/{featuresPath}")
-            Log.showFormat(f"{fontDir}", f"Fonts: {len(meta['fonts'])}  Texts: {len(meta['texts'])}")
+            Log.showFormat(f"{featuresPath[:-5]}", f"Fonts: {len(meta['fonts'])}  Texts: {len(meta['texts'])}")
         Log.showFormat("=" * Log.doLength, "=" * Log.doLength)
         Log.showFormat("Models", "")
         for modelID in os.listdir(Dir.modelsDir):
             meta = File.loadJSON(f"{Dir.modelsDir}/{modelID}/meta.json")
             Log.showFormat(
-                f"{fontDir}", f"Fonts: {len(meta['fonts'])}  Texts: {len(meta['texts'])}  Accuracy: {meta['accuracy']}  Ratio: {meta['ratio']}")
-        Log.showFormat("=" * Log.doLength, "=" * Log.doLength)
-        Log.showFormat(
-            "Summaray", f"Fonts: {len(os.listdir(Dir.fontsDir))}  Features: {len(os.listdir(Dir.featuresMetaDir))}  Models: {len(os.listdir(Dir.modelsDir))}")
+                f"{modelID}", f"Fonts: {len(meta['fonts'])}  Texts: {len(meta['texts'])}  Accuracy: {meta['accuracy']}  Ratio: {meta['ratio']}")
         Log.showFormat("=" * Log.doLength, "=" * Log.doLength)
 
 
@@ -127,32 +129,14 @@ class File:
         return data
 
     @staticmethod
-    def getFontDict():
-        if not Dir.existFile(File.fontDictPath):
-            File.saveJSON({}, File.fontDictPath)
-        return File.loadJSON(File.fontDictPath)
-
-    @staticmethod
     def saveFontDict(data):
         File.saveJSON(data, File.fontDictPath)
 
     @staticmethod
-    def getFontID(fontName):
-        fontDict = File.getFontDict()
-        if fontName not in fontDict.keys():
-            fontID = len(fontDict)
-            assert fontID not in fontDict.values()
-            fontDict[fontName] = fontID
-            File.saveFontDict(fontDict)
-        return fontDict[fontName]
-
-    @staticmethod
-    def getFontName(fontID):
-        fontDict = File.getFontDict()
-        if fontID in fontDict.values():
-            return list(fontDict.keys())[list(fontDict.values()).index(fontID)]
-        else:
-            return None
+    def loadFontDict():
+        if not Dir.existFile(File.fontDictPath):
+            File.saveJSON({}, File.fontDictPath)
+        return File.loadJSON(File.fontDictPath)
 
     @staticmethod
     def loadTXT(path):
@@ -161,20 +145,20 @@ class File:
         return data
 
     @staticmethod
-    def getKSX1001():
+    def loadKSX1001():
         data = File.loadTXT(File.KSX1001Path)
         assert len(data) == 2350
         return data
 
     @staticmethod
-    def getPangram():
+    def loadPangram():
         data = File.loadTXT(File.PangramPath)
         return [x for x in set(data) if len(x.strip()) > 0]
 
     @staticmethod
-    def getFonts(path):
+    def loadFonts(path):
         extension = [".ttf", ".otf", ".TTF", ".OTF"]
-        fonts = [{"name": fontPath[:-4], "path": f"{path}/{fontPath}", "id": File.getFontID(fontPath[:-4])}
+        fonts = [{"name": fontPath[:-4], "path": f"{path}/{fontPath}", "id": FontDict().getFontID(fontPath[:-4])}
                  for fontPath in os.listdir(path) if fontPath[-4:] in extension]
         return fonts
 
@@ -188,3 +172,24 @@ class File:
         with open(path, "rb") as f:
             data = pickle.load(f)
         return data
+
+
+class FontDict():
+    def __new__(cls):
+        if not hasattr(cls, 'instance'):
+            cls.instance = super(FontDict, cls).__new__(cls)
+            cls.instance.fontDict = File.loadFontDict()
+            cls.instance.reversedFontDict = {v: k for k, v in cls.instance.fontDict.items()}
+        return cls.instance
+
+    def getFontID(self, fontName):
+        if fontName not in self.fontDict:
+            fontID = len(self.fontDict)
+            self.fontDict[fontName] = fontID
+            self.reversedFontDict[fontID] = fontName
+            File.saveFontDict(self.fontDict)
+        return self.fontDict[fontName]
+
+    def getFontName(self, fontID):
+        assert fontID in self.reversedFontDict
+        return self.reversedFontDict[fontID] if fontID in self.reversedFontDict else None

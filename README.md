@@ -7,6 +7,8 @@ pip install scikit-learn
 pip install Pillow
 pip install matplotlib
 pip install autopep8
+pip install pandas
+pip install seaborn
 pip freeze > requirements.txt
 
 ## REFERENCE
@@ -32,6 +34,13 @@ feature는 사진에서도 뽑아내기 쉬운 걸로 할수록 실용성 증가
 폰트 100개 이상, KSX1001 2350자 - 정확성 (overall)  
 각 글리프에 대해서도 하한선 필요  
 colab 가능? GPU나 학교에 있는 좋은 컴퓨터 쓸 수 있는지 알아보기
+
+어떤 문자에 대해서 정확하지 않은가  
+상관분석 -> feature 개수 줄이기 -> time 적게 걸리기 
+정확도 기준? - 제가 원하는 
+오차에서 비슷한 폰트 나오는 거 확인 - 학습 안 시켜도 비슷한 거 찾아가는지?, 완전히 다른 폰트 찾아가는지?
+폰트의 비슷함을 반영할 수 있는 방법!, similarity 정량화 가능?, family 반영 Ex) 고딕, 명조 -> 실용성
+학습 안 시킨 폰트 넣어서 확인해보기
 
 ## SamsungHumanTech
 사용한 기술은 명시하되 (출처 표기) 기술 그 자체에 대해 다룰 필요는 없다  
